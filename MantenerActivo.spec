@@ -10,7 +10,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['numpy'],  # Pillow lo arrastra, pero la app no lo usa
     noarchive=False,
     optimize=0,
 )
