@@ -14,6 +14,12 @@ humano.
 - Cuenta atrás hasta la próxima interacción y globos de ayuda en cada opción.
 - Se minimiza a la bandeja del sistema; se sale desde el menú del icono.
 
+## Descarga
+
+El ejecutable listo para usar está en la página de
+[Releases](https://github.com/rboluda/MantenerActivo/releases/latest).
+Se genera automáticamente al publicar una etiqueta `v*`.
+
 ## Ejecutar desde el código
 
 Requiere Python 3 en Windows.
