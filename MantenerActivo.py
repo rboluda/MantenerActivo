@@ -79,7 +79,9 @@ def get_idle_seconds():
     lii = LASTINPUTINFO()
     lii.cbSize = ctypes.sizeof(LASTINPUTINFO)
     user32.GetLastInputInfo(ctypes.byref(lii))
-    return (kernel32.GetTickCount() - lii.dwTime) / 1000.0
+    # Aritmética de 32 bits sin signo: GetTickCount se devuelve con signo
+    # (negativo a partir de ~24,8 días encendido) y se desborda a los 49,7.
+    return ((kernel32.GetTickCount() - lii.dwTime) & 0xFFFFFFFF) / 1000.0
 
 
 ES_CONTINUOUS = 0x80000000
@@ -142,9 +144,12 @@ class Jiggler:
     def start(self):
         if self.running:
             return
-        self.stop_event.clear()
+        # Señal nueva en cada arranque: si el hilo anterior aún no ha
+        # terminado, sigue viendo la suya activada y sale.
+        self.stop_event = threading.Event()
         self.running = True
-        self.thread = threading.Thread(target=self._loop, daemon=True)
+        self.thread = threading.Thread(target=self._loop,
+                                       args=(self.stop_event,), daemon=True)
         self.thread.start()
 
     def stop(self):
@@ -158,25 +163,25 @@ class Jiggler:
             return None
         return max(0, int(math.ceil(self.next_move_at - time.monotonic())))
 
-    def _loop(self):
+    def _loop(self, stop_event):
         try:
             if self.prevent_system_sleep:
                 prevent_sleep(self.keep_display)
 
-            while not self.stop_event.is_set():
+            while not stop_event.is_set():
                 wait = random.uniform(self.min_interval, self.max_interval)
                 self.next_move_at = time.monotonic() + wait
                 self.status_text = "Activo"
 
                 waited = 0.0
-                while waited < wait and not self.stop_event.is_set():
+                while waited < wait and not stop_event.is_set():
                     step = min(0.25, wait - waited)
                     time.sleep(step)
                     waited += step
                     if self.prevent_system_sleep:
                         prevent_sleep(self.keep_display)
 
-                if self.stop_event.is_set():
+                if stop_event.is_set():
                     break
 
                 if self.only_when_idle and get_idle_seconds() < self.idle_threshold:
@@ -185,12 +190,12 @@ class Jiggler:
 
                 self.next_move_at = None
                 self.status_text = "Moviendo el ratón…"
-                self._do_movement()
+                self._do_movement(stop_event)
 
         finally:
             allow_sleep()
 
-    def _do_movement(self):
+    def _do_movement(self, stop_event):
         amp = max(1, int(self.amplitude))
         origin = get_cursor_pos()
 
@@ -200,13 +205,13 @@ class Jiggler:
         dy = math.sin(angle) * dist
         human_move(dx, dy, random.uniform(0.25, 0.7))
 
-        if random.random() < 0.5 and not self.stop_event.is_set():
+        if random.random() < 0.5 and not stop_event.is_set():
             time.sleep(random.uniform(0.3, 1.0))
             human_move(random.uniform(-amp * 0.3, amp * 0.3),
                        random.uniform(-amp * 0.3, amp * 0.3),
                        random.uniform(0.15, 0.4))
 
-        if self.return_to_origin and not self.stop_event.is_set():
+        if self.return_to_origin and not stop_event.is_set():
             time.sleep(random.uniform(0.2, 0.8))
             cur = get_cursor_pos()
             human_move(origin[0] - cur[0], origin[1] - cur[1],
