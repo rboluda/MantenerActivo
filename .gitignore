@@ -1,0 +1,9 @@
+# Salidas de PyInstaller
+build/
+dist/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
